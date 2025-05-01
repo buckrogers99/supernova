@@ -26,11 +26,7 @@ Install the required packages using pip:
 pip install numpy numba pyqtgraph PyQt5
 ```
 
-Run the simulation by executing the `galaxy_sim.py` script:
-
-```bash
-python galaxy_sim.py
-```
+Run the simulation in the `galaxy_sim.ipynd` file:
 
 ## Simulation Parameters
 
