@@ -1,92 +1,131 @@
 # Supernova Galaxy Simulation
 
-This project simulates supernova events within a spiral galaxy disk, specifically modeling the Milky Way. It tracks the impact of these events on nearby "cells" within the galaxy, which can also harbor civilizations. The simulation uses Numba for performance acceleration and PyQtGraph to provide a live-updating visualization of the simulation's progress.
+This project simulates supernova events within a spiral galaxy disk (Milky Way–like). It tracks impacts of supernovae on a 3D discretized disk and (optionally) the emergence and extinction of civilizations. Numba accelerates core loops and PyQtGraph provides a live GUI.
 
 ## Features
 
-- **Supernova Simulation**: Randomly simulates supernovae occurring within a disk-shaped galaxy.
-- **3D Galaxy Modeling**: Uses a 3D grid to model the galaxy's structure and track supernova impacts.
-- **Civilization Dynamics**: Simulates the emergence and extinction of civilizations affected by supernova events.
-- **Real-Time Visualization**: Provides a PyQt-based GUI with live-updating plots:
-  - **Disk Coverage Evolution**: Displays the percentage of the galaxy affected by supernova impacts over time.
-  - **Civilization Count Evolution**: Shows the number of living civilizations throughout the simulation.
-  - **Hit Count Histogram**: Represents the frequency of grid cells impacted by supernovae.
+- **Supernova Simulation**: Stochastic supernova events via Poisson statistics.
+- **3D Galaxy Grid**: Cylindrical disk sampled on a Cartesian grid with masking.
+- **Civilization Dynamics (optional)**: Random emergence; extinction if inside a lethal bubble.
+- **Real-Time Visualization (PyQtGraph)**:
+  - Disk coverage vs interval for multiple hit thresholds.
+  - Living civilization count vs interval.
+  - Hit count histogram.
+  - 2D heat map slice of mid-plane hit counts.
+
+## Project Structure
+
+```
+main.py                     # CLI / GUI entry point
+supernova_sim/
+  __init__.py               # package export
+  simulation.py             # SupernovaSimulation class (logic/state)
+  numba_core.py             # Numba-accelerated inner functions
+  gui.py                    # PyQtGraph MainWindow
+
+galaxy_sim.ipynb            # (Legacy / exploratory notebook)
+readme.md
+```
 
 ## Requirements
 
-- Python 3.x
-- NumPy
-- Numba
-- PyQtGraph
-- PyQt5
+- Python 3.9+
+- numpy
+- numba
+- pyqtgraph
+- PyQt5 (or PyQt6; adjust import if needed)
 
-Install the required packages using pip:
-
+Install:
 ```bash
 pip install numpy numba pyqtgraph PyQt5
 ```
 
-Run the simulation in the `galaxy_sim.ipynd` file:
+## Quick Start
 
-## Simulation Parameters
-
-You can adjust the simulation’s behavior by modifying parameters in the SupernovaSimulation class within galaxy_sim.py. Key parameters include:
-
-Simulation Settings:
-
-- num_intervals: Total number of simulation intervals to run.
-- interval_years: Number of years per interval.
-- rate_per_year: Average number of supernovae per year.
-
-Galaxy Dimensions:
-
-- R: Radius of the galaxy disk (light-years).
-- h: Thickness of the galaxy disk (light-years).
-
-Supernova Impact:
-
-- bubble_r: Radius of the lethal impact zone of a supernova (light-years).
-
-Grid Resolution:
-
-- ngrid_xy: Number of grid cells along the x and y axes.
-- ngrid_z: Number of grid cells along the z-axis.
-
-Civilization Settings:
-
-- simulate_civilizations: Enable or disable civilization simulation.
-- civ_emergence_rate: Rate at which new civilizations emerge (per year).
-
-Random Seed:
-
-- seed: Seed for random number generation to ensure reproducibility.
-
-To modify these parameters, edit them directly when instantiating the SupernovaSimulation object in the main() function:
-
-```python
-sim = SupernovaSimulation(
-    num_intervals=10000,
-    interval_years=1e6,
-    rate_per_year=0.02,
-    R=50000,
-    h=1000,
-    bubble_r=50,
-    ngrid_xy=200,
-    ngrid_z=50,
-    max_threshold=5,
-    simulate_civilizations=True,
-    civ_emergence_rate=1e-6,  # New civilizations per year
-    seed=42
-)
+Run the GUI with defaults:
+```bash
+python main.py
 ```
+Show available options:
+```bash
+python main.py --help
+```
+Example custom run:
+```bash
+python main.py \
+  --num-intervals 5000 \
+  --interval-years 1e6 \
+  --rate-per-year 0.02 \
+  --R 50000 --h 1000 \
+  --bubble-r 75 \
+  --ngrid-xy 150 --ngrid-z 40 \
+  --max-threshold 6 \
+  --civ-emergence-rate 1e-9 \
+  --seed 123
+```
+Disable civilization simulation:
+```bash
+python main.py --no-civs
+```
+Faster lightweight test (small grid):
+```bash
+python main.py --num-intervals 200 --ngrid-xy 80 --ngrid-z 20 --bubble-r 40
+```
+
+## Command-Line Arguments (maps directly to SupernovaSimulation)
+
+- --num-intervals: Total simulation intervals.
+- --interval-years: Years per interval.
+- --rate-per-year: Mean supernova rate (events/year).
+- --R: Galaxy radius (ly).
+- --h: Disk thickness (ly).
+- --bubble-r: Lethal bubble radius (ly).
+- --ngrid-xy / --ngrid-z: Grid resolution.
+- --max-threshold: Highest hit threshold tracked for coverage curves.
+- --no-civs: Disable civilization modeling.
+- --civ-emergence-rate: New civilizations per year (Poisson; internally scaled by interval years).
+- --seed: RNG seed.
+- --update-ms: GUI refresh timer (milliseconds).
+
+## Adjusting Parameters Programmatically
+
+You can also import and run headless logic:
+```python
+from supernova_sim import SupernovaSimulation
+sim = SupernovaSimulation(num_intervals=1000, ngrid_xy=100, ngrid_z=30)
+while True:
+    result = sim.step()
+    if not result:
+        break
+print("Total supernovae:", sim.supernovae)
+```
+(Headless batch / data export helpers can be added; ask if you want this scaffold.)
+
+## Legacy Notebook
+
+The original exploratory notebook (galaxy_sim.ipynb) is retained but the authoritative code now lives in the package and main.py. Prefer modifying simulation.py for logic changes and gui.py for visualization tweaks.
 
 ## Extending the Simulation
 
-The simulation is designed to be flexible and extendable. Here are some ideas:
+Ideas:
+- Increase grid resolution (performance scales roughly with number of active cells * events).
+- Non-uniform spatial SN distribution (e.g., exponential radial profile, thin/thick disk weighting).
+- Different event types (gamma-ray bursts) with distinct lethal radii.
+- Civilization growth/spread models; longevity distributions.
+- Star formation history & IMF/PDMF to drive spatial/temporal SN rates.
+- Persistence layer: periodically serialize state for long runs.
+- Headless batch mode producing CSV / HDF5 outputs.
 
-- Adjust Grid Resolution: Increase ngrid_xy and ngrid_z for a more detailed simulation (note that this will increase computational load).
-- Modify Supernova Rates: Experiment with different rate_per_year values to simulate various galaxy environments.
-- Introduce New Features: Add elements like gamma-ray bursts, civilization expansion, and civilization extinction.
-- Data Analysis: Collect and analyze data on civilization lifespans, extinction events, or impact frequencies.
-- Spatio-temporal Supernova Modeling: Incorporate spatial and temporal effects to model supernova events in a more complex galaxy environment. Given that supernovae belong to stars that are greater than 8 solar masses, and these stars burn fast, supernova events can only be found in areas that have recently formed stars.
-- Incorporate an IMF and a PDMF to more accurately model the distribution of the mass of stars in the galaxy.
+## Performance Notes
+
+- First step JIT-compiles Numba functions; expect an initial latency.
+- Smaller bubble_r relative to cell size reduces per-event loop volume (rx, ry, rz window).
+- For very large grids consider profiling and possibly tiling or sparse representations.
+
+## License
+
+(Add a license section here if you intend to distribute.)
+
+## Contributing
+
+Open issues / PRs for enhancements, optimizations, or scientific modeling improvements.
