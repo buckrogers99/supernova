@@ -12,19 +12,21 @@ This project simulates supernova events within a spiral galaxy disk (Milky Wayâ€
   - Living civilization count vs interval.
   - Hit count histogram.
   - 2D heat map slice of mid-plane hit counts.
+- **Headless / Batch Mode**: Run without a GUI and export JSON or CSV.
 
 ## Project Structure
 
 ```
-main.py                     # CLI / GUI entry point
+main.py                     # CLI / GUI & headless entry point
 supernova_sim/
   __init__.py               # package export
   simulation.py             # SupernovaSimulation class (logic/state)
   numba_core.py             # Numba-accelerated inner functions
   gui.py                    # PyQtGraph MainWindow
 
-galaxy_sim.ipynb            # (Legacy / exploratory notebook)
 readme.md
+Dockerfile                  # Container build (GUI capable)
+requirements.txt
 ```
 
 ## Requirements
@@ -33,14 +35,14 @@ readme.md
 - numpy
 - numba
 - pyqtgraph
-- PyQt5 (or PyQt6; adjust import if needed)
+- PyQt5 (or PyQt6; adjust import if needed; not required for headless mode if you do not import gui)
 
 Install:
 ```bash
-pip install numpy numba pyqtgraph PyQt5
+pip install -r requirements.txt
 ```
 
-## Quick Start
+## Quick Start (GUI)
 
 Run the GUI with defaults:
 ```bash
@@ -72,7 +74,22 @@ Faster lightweight test (small grid):
 python main.py --num-intervals 200 --ngrid-xy 80 --ngrid-z 20 --bubble-r 40
 ```
 
-## Command-Line Arguments (maps directly to SupernovaSimulation)
+## Headless / Batch Mode
+
+Run without a GUI (no Qt dependency at runtime) and export results:
+```bash
+# JSON export (auto-detected by extension)
+python main.py --no-gui --num-intervals 3000 --output results.json
+
+# Explicit CSV export
+python main.py --no-gui --output summary.csv --output-format csv --num-intervals 5000
+
+# Quiet mode (minimal stdout)
+python main.py --no-gui --output results.json --quiet
+```
+JSON payload includes parameters, coverage histories (fractions), civilization counts, and total supernovae. CSV rows list interval-wise coverage and civ counts.
+
+## Command-Line Arguments (maps to SupernovaSimulation + runner)
 
 - --num-intervals: Total simulation intervals.
 - --interval-years: Years per interval.
@@ -83,48 +100,72 @@ python main.py --num-intervals 200 --ngrid-xy 80 --ngrid-z 20 --bubble-r 40
 - --ngrid-xy / --ngrid-z: Grid resolution.
 - --max-threshold: Highest hit threshold tracked for coverage curves.
 - --no-civs: Disable civilization modeling.
-- --civ-emergence-rate: New civilizations per year (Poisson; internally scaled by interval years).
+- --civ-emergence-rate: New civilizations per year (scaled by interval years internally).
 - --seed: RNG seed.
-- --update-ms: GUI refresh timer (milliseconds).
+- --update-ms: GUI refresh timer (ms).
+- --no-gui: Run headless (no GUI) until completion.
+- --output PATH: Write results (headless mode) to JSON or CSV.
+- --output-format {json,csv}: Force output format (otherwise inferred from extension).
+- --quiet: Suppress progress prints in headless mode.
 
 ## Adjusting Parameters Programmatically
 
-You can also import and run headless logic:
 ```python
 from supernova_sim import SupernovaSimulation
 sim = SupernovaSimulation(num_intervals=1000, ngrid_xy=100, ngrid_z=30)
 while True:
-    result = sim.step()
-    if not result:
+    if not sim.step():
         break
 print("Total supernovae:", sim.supernovae)
 ```
-(Headless batch / data export helpers can be added; ask if you want this scaffold.)
+(Headless helpers already integrated; use CLI for export.)
 
-## Legacy Notebook
+## Docker
 
-The original exploratory notebook (galaxy_sim.ipynb) is retained but the authoritative code now lives in the package and main.py. Prefer modifying simulation.py for logic changes and gui.py for visualization tweaks.
+Build image:
+```bash
+docker build -t supernova .
+```
+Run GUI (X11 forwarding example on Linux):
+```bash
+xhost +local:root
+docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix supernova
+```
+Headless batch (no display needed):
+```bash
+docker run --rm supernova --no-gui --num-intervals 3000 --output results.json
+```
+Copy results out (mount a host volume):
+```bash
+docker run --rm -v "$(pwd)/out:/data" supernova \
+  --no-gui --num-intervals 5000 --output /data/results.json
+```
+
+macOS note: For GUI inside container you need an X server (XQuartz) and set `-e DISPLAY=host.docker.internal:0` (allow connections in XQuartz preferences).
 
 ## Extending the Simulation
 
 Ideas:
-- Increase grid resolution (performance scales roughly with number of active cells * events).
-- Non-uniform spatial SN distribution (e.g., exponential radial profile, thin/thick disk weighting).
-- Different event types (gamma-ray bursts) with distinct lethal radii.
+- Increase grid resolution (performance ~ active cells * events).
+- Non-uniform spatial SN distribution (exponential radial profile, vertical scale height).
+- Additional transient types (GRBs) with distinct lethality radii.
 - Civilization growth/spread models; longevity distributions.
-- Star formation history & IMF/PDMF to drive spatial/temporal SN rates.
-- Persistence layer: periodically serialize state for long runs.
-- Headless batch mode producing CSV / HDF5 outputs.
+- Star formation history & IMF/PDMF driven temporal/spatial SN rates.
+- State checkpointing & resume for very long runs.
+- Parallel batch sweeps over parameter grids (e.g., via multiprocessing or Snakemake).
 
 ## Performance Notes
 
-- First step JIT-compiles Numba functions; expect an initial latency.
-- Smaller bubble_r relative to cell size reduces per-event loop volume (rx, ry, rz window).
-- For very large grids consider profiling and possibly tiling or sparse representations.
+- First step JIT-compiles Numba functions (warm-up cost).
+- Bubble radius vs cell size controls per-event loop volume (rx, ry, rz window extents).
+- Consider profiling (e.g., `numba --annotate-html` or external profilers) for large grids.
 
-## License
+## Scientific Assumptions (Current Simplifications)
 
-(Add a license section here if you intend to distribute.)
+- Uniform spatial SN distribution in disk interior.
+- Instantaneous lethal sphere; no radiation falloff gradient.
+- Independent events; no clustering or spiral arm structure.
+- Civilization emergence is spatially uniform (subject to disk mask) and temporally Poisson.
 
 ## Contributing
 
